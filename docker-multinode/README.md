@@ -1,20 +1,21 @@
-Running Multi-Node Kubernetes Using Docker and Flocker
-------------------------------------------------------
-This modified version supports automated migration of Flocker volumes. 
+Flocker volumes for the Portable Multi-Node Kubernetes cluster
+----------------------------------------------------------------
+This modified version of the docker-multinode project supports automated migration of Flocker volumes. 
 
 ## Prerequisites
 
-Linux machines with **Docker 1.01.0 or higher**
+Linux machines with **Docker 1.11.0 or higher**
 
 ### Flocker
 A working installation of Flocker on every kubernetes node. The flocker control service should be installed on the kubernetes master node.
 See: https://docs.clusterhq.com/en/latest/kubernetes-integration/manual-install.html
 
-On every node: 
+
+On every Kubernetes node where flocker volumes are attached: some environment variables and files must be created in order to authenticate Kubernetes as a user of the Flocker cluster.
 
 * Some environment variables must be specified on *all* Kubernetes nodes. These environment variables can be set in the shell session where you will run the master or worker scripts.
-  - `FLOCKER_USER_CA_DIR` should refer to the directory where the necessary keys and certificates are stored that identifies Kubernetes as an authenticated user of the Flocker cluster (see below).
-  - Optional the `FLOCKER_CONTROL_SERVICE_PORT` defaults to 4523, but if Flocker control service listens on another port you must specify this.
+  - `FLOCKER_USER_CA_DIR` should refer to the directory where the necessary keys and certificates are stored 
+  - Optional the `FLOCKER_CONTROL_SERVICE_PORT` defaults to 4523, but if the Flocker control service listens on another port you must specify this.
   - The `FLOCKER_CONTROL_SERVICE_HOST` defaults to the `${MASTER_IP}`
 
 
@@ -26,8 +27,10 @@ On every node:
   - `FLOCKER_CONTROL_SERVICE_CA_FILE` should refer to the full path to the cluster certificate file
   - `FLOCKER_CONTROL_SERVICE_CLIENT_KEY_FILE` should refer to the full path to the api key file for the API user
   - `FLOCKER_CONTROL_SERVICE_CLIENT_CERT_FILE` should refer to the full path to the api certificate file for the API user
+  
 
-
+#### Possible TODO's:
+* Run Flocker using Docker
 
 ## Overview
 
