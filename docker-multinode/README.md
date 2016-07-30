@@ -1,17 +1,18 @@
 Flocker volumes for the Portable Multi-Node Kubernetes cluster
 ----------------------------------------------------------------
-This fork of the docker-multinode project contains a small extension to that integrates Kubernetes with Flocker. 
+This fork of the docker-multinode project contains a small extension that integrates Kubernetes with Flocker. 
+The extension ensures that the necessary environment variables and security credentials are set in the hyperkube containers of Kubernetes.
 
 ## Prerequisites
 
 Linux machines with **Docker 1.11.0 or higher**
 
 ## Flocker
-A working installation of Flocker on every kubernetes node. The flocker control service is typically installed on the kubernetes master node.
+A working installation of Flocker on every Kubernetes node. The flocker control service is typically installed on the Kubernetes master node.
 See: https://docs.clusterhq.com/en/latest/kubernetes-integration/manual-install.html
 
 
-On every Kubernetes node where Flocker volumes will be attached, some environment variables and files must be created in order to authenticate Kubernetes as a user of the Flocker cluster. The environment variables can be set in the shell session where you will run the master or worker scripts of Kubernetes:
+On every Kubernetes node where Flocker volumes will be attached, one or more environment variables and files must be created in order to mutually authenticate Kubernetes and Flocker against each other: Kubernetes as a user of the Flocker cluster and the Flocker cluster as a Flocker volume manager to Kubernetes. The environment variables can be set in the shell session where you will run the master or worker scripts of Kubernetes:
 
 * Only one environment variable must be specified mandatory: 
   - `FLOCKER_USER_CA_DIR` should refer to the directory where the necessary keys and certificates for authenticating kubernetes are stored 
@@ -20,7 +21,7 @@ On every Kubernetes node where Flocker volumes will be attached, some environmen
 
 
 * In the `FLOCKER_USER_CA_DIR` directory you need to store three files
-  - the `cluster.crt` of the Flocker cluster, 
+  - the `cluster.crt` file. This file is the certificate of the Flocker cluster. 
   - the `kubernetes.key` and `kubernetes.crt` files. These files are the api client key and certificate that Kubernetes uses to talk to the Flocker control service. 
  
   If you have given other names to these files, then you have to specify these names in other environment variables:
@@ -30,7 +31,7 @@ On every Kubernetes node where Flocker volumes will be attached, some environmen
   
 
 #### Possible TODO's:
-* Run Flocker using Docker
+* Run Flocker using Docker as well.
 
 ## Overview
 
