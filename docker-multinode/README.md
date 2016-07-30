@@ -4,17 +4,29 @@ This modified version supports automated migration of Flocker volumes.
 
 ## Prerequisites
 
-The only thing you need is a linux machine with **Docker 1.11.0 or higher**
+Linux machines with **Docker 1.01.0 or higher**
 
-A working installation of Flocker on every kubernetes node. 
+### Flocker
+A working installation of Flocker on every kubernetes node. The flocker control service should be installed on the kubernetes master node.
 See: https://docs.clusterhq.com/en/latest/kubernetes-integration/manual-install.html
 
 On every node: 
-* A directory /etc/flocker/ in which is stored the `cluster.crt` of the Flocker cluster, the `kubernetes.key` and `kubernetes.crt` files. These files are the api client key and certificate that Kubernetes uses to talk to the Flocker control service.
 
-* Two environment variables must be specified on *all* Kubernetes nodes. 
-  - `FLOCKER_CONTROL_SERVICE_HOST` should refer to the hostname of the Control Service
-  - `FLOCKER_CONTROL_SERVICE_PORT` should refer to the port of the Control Service (the API service defaults to 4523 but this must still be specified)
+* Some environment variables must be specified on *all* Kubernetes nodes. These environment variables can be set in the shell session where you will run the master or worker scripts.
+  - `FLOCKER_USER_CA_DIR` should refer to the directory where the necessary keys and certificates are stored that identifies Kubernetes as an authenticated user of the Flocker cluster (see below).
+  - Optional the `FLOCKER_CONTROL_SERVICE_PORT` defaults to 4523, but if Flocker control service listens on another port you must specify this.
+  - The `FLOCKER_CONTROL_SERVICE_HOST` defaults to the `${MASTER_IP}`
+
+
+* In the `FLOCKER_USER_CA_DIR` directory you need to store three files
+  - the `cluster.crt` of the Flocker cluster, 
+  - the `kubernetes.key` and `kubernetes.crt` files. These files are the api client key and certificate that Kubernetes uses to talk to the Flocker control service. 
+ 
+  If you have given other names to these files, then you have to specify these names in other environment variables:
+  - `FLOCKER_CONTROL_SERVICE_CA_FILE` should refer to the full path to the cluster certificate file
+  - `FLOCKER_CONTROL_SERVICE_CLIENT_KEY_FILE` should refer to the full path to the api key file for the API user
+  - `FLOCKER_CONTROL_SERVICE_CLIENT_CERT_FILE` should refer to the full path to the api certificate file for the API user
+
 
 
 ## Overview
