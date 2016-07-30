@@ -45,9 +45,12 @@ kube::multinode::main(){
   FLOCKER_CONTROL_SERVICE_PORT=${FLOCKER_CONTROL_SERVICE_PORT:-4523}
   FLOCKER_CONTROL_SERVICE_HOST=${FLOCKER_CONTROL_SERVICE_HOST:-${MASTER_IP}}
   
-  FLOCKER_CONTROL_SERVICE_CA_FILE=${FLOCKER_CONTROL_SERVICE_CA_FILE:-/etc/flocker/cluster.crt}
-  FLOCKER_CONTROL_SERVICE_CLIENT_KEY_FILE=${FLOCKER_CONTROL_SERVICE_CLIENT_KEY_FILE:-/etc/flocker/kubernetes.key}
-  FLOCKER_CONTROL_SERVICE_CLIENT_CERT_FILE=${FLOCKER_CONTROL_SERVICE_CLIENT_CERT_FILE:-/etc/flocker/kubernetes.crt}
+  FLOCKER_USER_CA_DIR=${FLOCKER_USER_CA_DIR:-/etc/flocker/}
+
+  FLOCKER_CONTROL_SERVICE_CA_FILE=${FLOCKER_CONTROL_SERVICE_CA_FILE:-${FLOCKER_USER_CA_DIR}cluster.crt}
+  FLOCKER_CONTROL_SERVICE_CLIENT_KEY_FILE=${FLOCKER_CONTROL_SERVICE_CLIENT_KEY_FILE:-${FLOCKER_USER_CA_DIR}kubernetes.key}
+  FLOCKER_CONTROL_SERVICE_CLIENT_CERT_FILE=${FLOCKER_CONTROL_SERVICE_CLIENT_CERT_FILE:-${FLOCKER_USER_CA_DIR}kubernetes.crt}
+  FLOCKER_USER_CA_DIR=${FLOCKER_USER_CA_DIR:/etc/flocker}
 
   # Constants
   BOOTSTRAP_DOCKER_SOCK="unix:///var/run/docker-bootstrap.sock"
@@ -58,7 +61,7 @@ kube::multinode::main(){
     -v /run:/run:rw \
     -v /var/lib/docker:/var/lib/docker:rw \
     -v /var/lib/kubelet:/var/lib/kubelet:shared \
-    -v /etc/flocker:/etc/flocker \
+    -v ${FLOCKER_USER_CA_DIR}:${FLOCKER_USER_CA_DIR} \
     -v /var/log/containers:/var/log/containers:rw"
 
   # Paths
