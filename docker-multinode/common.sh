@@ -42,6 +42,13 @@ kube::multinode::main(){
   USE_CNI=${USE_CNI:-"false"}
   CNI_ARGS=""
 
+  FLOCKER_CONTROL_SERVICE_PORT=${FLOCKER_CONTROL_SERVICE_PORT:-4523}
+  FLOCKER_CONTROL_SERVICE_HOST=${FLOCKER_CONTROL_SERVICE_HOST:-${MASTER_IP}}
+  
+  FLOCKER_CONTROL_SERVICE_CA_FILE=${FLOCKER_CONTROL_SERVICE_CA_FILE:-/etc/flocker/cluster.crt}
+  FLOCKER_CONTROL_SERVICE_CLIENT_KEY_FILE=${FLOCKER_CONTROL_SERVICE_CLIENT_KEY_FILE:-/etc/flocker/kubernetes.key}
+  FLOCKER_CONTROL_SERVICE_CLIENT_CERT_FILE=${FLOCKER_CONTROL_SERVICE_CLIENT_CERT_FILE:-/etc/flocker/kubernetes.crt}
+
   # Constants
   BOOTSTRAP_DOCKER_SOCK="unix:///var/run/docker-bootstrap.sock"
   BOOTSTRAP_DOCKER_PARAM="-H ${BOOTSTRAP_DOCKER_SOCK}"
@@ -51,6 +58,7 @@ kube::multinode::main(){
     -v /run:/run:rw \
     -v /var/lib/docker:/var/lib/docker:rw \
     -v /var/lib/kubelet:/var/lib/kubelet:shared \
+    -v /etc/flocker:/etc/flocker \
     -v /var/log/containers:/var/log/containers:rw"
 
   # Paths
@@ -104,6 +112,8 @@ kube::multinode::check_params() {
   kube::log::status "ARCH is set to: ${ARCH}"
   kube::log::status "NET_INTERFACE is set to: ${NET_INTERFACE}"
   kube::log::status "USE_CNI is set to: ${USE_CNI}"
+  kube::log::status "USE_CNI is set to: ${USE_CNI}"
+  kube::log::status "FLOCKER_CONTROL_SERVICE_PORT is set to: ${FLOCKER_CONTROL_SERVICE_PORT}"  
   kube::log::status "--------------------------------------------"
 }
 
@@ -186,12 +196,11 @@ kube::multinode::start_k8s_master() {
 
   # TODO: Get rid of --hostname-override
   docker run -d \
-    -v /etc/flocker:/etc/flocker \
-    -e "FLOCKER_CONTROL_SERVICE_HOST=172.17.13.43" \
-    -e "FLOCKER_CONTROL_SERVICE_PORT=4523" \
-    -e "FLOCKER_CONTROL_SERVICE_CA_FILE=/etc/flocker/cluster.crt" \
-    -e "FLOCKER_CONTROL_SERVICE_CLIENT_KEY_FILE=/etc/flocker/kubernetes.key" \
-    -e "FLOCKER_CONTROL_SERVICE_CLIENT_CERT_FILE=/etc/flocker/kubernetes.crt" \
+    -e "FLOCKER_CONTROL_SERVICE_HOST=${FLOCKER_CONTROL_SERVICE_HOST}" \
+    -e "FLOCKER_CONTROL_SERVICE_PORT=${FLOCKER_CONTROL_SERVICE_PORT}" \
+    -e "FLOCKER_CONTROL_SERVICE_CA_FILE=${FLOCKER_CONTROL_SERVICE_CA_FILE}" \
+    -e "FLOCKER_CONTROL_SERVICE_CLIENT_KEY_FILE=${FLOCKER_CONTROL_SERVICE_CLIENT_KEY_FILE}" \
+    -e "FLOCKER_CONTROL_SERVICE_CLIENT_CERT_FILE=${FLOCKER_CONTROL_SERVICE_CLIENT_CERT_FILE}" \
     --net=host \
     --pid=host \
     --privileged \
@@ -218,12 +227,11 @@ kube::multinode::start_k8s_worker() {
   # TODO: Use secure port for communication
   # TODO: Get rid of --hostname-override
   docker run -d \
-    -v /etc/flocker:/etc/flocker \
-    -e "FLOCKER_CONTROL_SERVICE_HOST=172.17.13.43" \
-    -e "FLOCKER_CONTROL_SERVICE_PORT=4523" \
-    -e "FLOCKER_CONTROL_SERVICE_CA_FILE=/etc/flocker/cluster.crt" \
-    -e "FLOCKER_CONTROL_SERVICE_CLIENT_KEY_FILE=/etc/flocker/kubernetes.key" \
-    -e "FLOCKER_CONTROL_SERVICE_CLIENT_CERT_FILE=/etc/flocker/kubernetes.crt" \
+    -e "FLOCKER_CONTROL_SERVICE_HOST=${FLOCKER_CONTROL_SERVICE_HOST}" \
+    -e "FLOCKER_CONTROL_SERVICE_PORT=${FLOCKER_CONTROL_SERVICE_PORT}" \
+    -e "FLOCKER_CONTROL_SERVICE_CA_FILE=${FLOCKER_CONTROL_SERVICE_CA_FILE}" \
+    -e "FLOCKER_CONTROL_SERVICE_CLIENT_KEY_FILE=${FLOCKER_CONTROL_SERVICE_CLIENT_KEY_FILE}" \
+    -e "FLOCKER_CONTROL_SERVICE_CLIENT_CERT_FILE=${FLOCKER_CONTROL_SERVICE_CLIENT_CERT_FILE}" \
     --net=host \
     --pid=host \
     --privileged \
