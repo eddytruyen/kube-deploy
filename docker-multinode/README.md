@@ -1,9 +1,21 @@
-Running Multi-Node Kubernetes Using Docker
-------------------------------------------
+Running Multi-Node Kubernetes Using Docker and Flocker
+------------------------------------------------------
+This modified version supports automated migration of Flocker volumes. 
 
 ## Prerequisites
 
-The only thing you need is a linux machine with **Docker 1.10.0 or higher**
+The only thing you need is a linux machine with **Docker 1.11.0 or higher**
+
+A working installation of Flocker on every kubernetes node. 
+See: https://docs.clusterhq.com/en/latest/kubernetes-integration/manual-install.html
+
+On every node: 
+* A directory /etc/flocker/ in which is stored the `cluster.crt` of the Flocker cluster, the `kubernetes.key` and `kubernetes.crt` files. These files are the api client key and certificate that Kubernetes uses to talk to the Flocker control service.
+
+* Two environment variables must be specified on *all* Kubernetes nodes. 
+  - `FLOCKER_CONTROL_SERVICE_HOST` should refer to the hostname of the Control Service
+  - `FLOCKER_CONTROL_SERVICE_PORT` should refer to the port of the Control Service (the API service defaults to 4523 but this must still be specified)
+
 
 ## Overview
 
