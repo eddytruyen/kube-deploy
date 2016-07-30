@@ -1,7 +1,7 @@
 Flocker volumes for the Portable Multi-Node Kubernetes cluster
 ----------------------------------------------------------------
 This fork of the docker-multinode project contains a small extension that integrates Kubernetes with Flocker. 
-The extension ensures that the necessary environment variables and security credentials are set in the hyperkube containers of Kubernetes.
+The extension ensures that the necessary Flocker environment variables and security credentials are set in the hyperkube containers of Kubernetes.
 
 ## Prerequisites
 
