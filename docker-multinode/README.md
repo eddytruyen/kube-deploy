@@ -1,22 +1,22 @@
 Flocker volumes for the Portable Multi-Node Kubernetes cluster
 ----------------------------------------------------------------
-This modified version of the docker-multinode project supports automated migration of Flocker volumes. 
+This fork of the docker-multinode project contains a small extension to that integrates Kubernetes with Flocker. 
 
 ## Prerequisites
 
 Linux machines with **Docker 1.11.0 or higher**
 
-### Flocker
-A working installation of Flocker on every kubernetes node. The flocker control service should be installed on the kubernetes master node.
+## Flocker
+A working installation of Flocker on every kubernetes node. The flocker control service is typically installed on the kubernetes master node.
 See: https://docs.clusterhq.com/en/latest/kubernetes-integration/manual-install.html
 
 
-On every Kubernetes node where flocker volumes are attached: some environment variables and files must be created in order to authenticate Kubernetes as a user of the Flocker cluster.
+On every Kubernetes node where Flocker volumes will be attached, some environment variables and files must be created in order to authenticate Kubernetes as a user of the Flocker cluster. The environment variables can be set in the shell session where you will run the master or worker scripts of Kubernetes:
 
-* Some environment variables must be specified on *all* Kubernetes nodes. These environment variables can be set in the shell session where you will run the master or worker scripts.
-  - `FLOCKER_USER_CA_DIR` should refer to the directory where the necessary keys and certificates are stored 
-  - Optional the `FLOCKER_CONTROL_SERVICE_PORT` defaults to 4523, but if the Flocker control service listens on another port you must specify this.
-  - The `FLOCKER_CONTROL_SERVICE_HOST` defaults to the `${MASTER_IP}`
+* Only one environment variable must be specified mandatory: 
+  - `FLOCKER_USER_CA_DIR` should refer to the directory where the necessary keys and certificates for authenticating kubernetes are stored 
+  - Optional: the `FLOCKER_CONTROL_SERVICE_PORT` defaults to 4523, but if the Flocker control service listens on another port you must specify this.
+  - Optional: The `FLOCKER_CONTROL_SERVICE_HOST` defaults to the `${MASTER_IP}`
 
 
 * In the `FLOCKER_USER_CA_DIR` directory you need to store three files
