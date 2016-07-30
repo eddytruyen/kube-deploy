@@ -50,7 +50,6 @@ kube::multinode::main(){
   FLOCKER_CONTROL_SERVICE_CA_FILE=${FLOCKER_CONTROL_SERVICE_CA_FILE:-${FLOCKER_USER_CA_DIR}cluster.crt}
   FLOCKER_CONTROL_SERVICE_CLIENT_KEY_FILE=${FLOCKER_CONTROL_SERVICE_CLIENT_KEY_FILE:-${FLOCKER_USER_CA_DIR}kubernetes.key}
   FLOCKER_CONTROL_SERVICE_CLIENT_CERT_FILE=${FLOCKER_CONTROL_SERVICE_CLIENT_CERT_FILE:-${FLOCKER_USER_CA_DIR}kubernetes.crt}
-  FLOCKER_USER_CA_DIR=${FLOCKER_USER_CA_DIR:/etc/flocker}
 
   # Constants
   BOOTSTRAP_DOCKER_SOCK="unix:///var/run/docker-bootstrap.sock"
@@ -115,8 +114,8 @@ kube::multinode::check_params() {
   kube::log::status "ARCH is set to: ${ARCH}"
   kube::log::status "NET_INTERFACE is set to: ${NET_INTERFACE}"
   kube::log::status "USE_CNI is set to: ${USE_CNI}"
-  kube::log::status "USE_CNI is set to: ${USE_CNI}"
-  kube::log::status "FLOCKER_CONTROL_SERVICE_PORT is set to: ${FLOCKER_CONTROL_SERVICE_PORT}"  
+  kube::log::status "FLOCKER_CONTROL_SERVICE_HOST is set to ${FLOCKER_CONTROL_SERVICE_HOST}"
+  kube::log::status "FLOCKER_USER_CA_DIR is set to ${FLOCKER_USER_CA_DIR}"
   kube::log::status "--------------------------------------------"
 }
 
