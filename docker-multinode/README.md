@@ -7,10 +7,40 @@ The extension ensures that the necessary Flocker environment variables and secur
 
 Linux machines with **Docker 1.11.0 or higher**
 
-## Flocker
-A working installation of Flocker on every Kubernetes node. The flocker control service is typically installed on the Kubernetes master node.
-See: https://docs.clusterhq.com/en/latest/kubernetes-integration/manual-install.html
+## Installing Flocker
+A working installation of Flocker on every Kubernetes node is required. The flocker control service is typically installed on the Kubernetes master node.
 
+See https://docs.clusterhq.com/en/latest/kubernetes-integration/manual-install.html
+There was some ambiguity in the Section [Configuring cluster authentication](https://docs.clusterhq.com/en/latest/kubernetes-integration/configuring-authentication.html).
+It is the idea that you generate node certificates for each node to which volumes should be attached. You have to generate these node certificates from the node where the flockercli package is installed (typically the control service node of Flocker), and in the directory where the cluster.key key is stored. Then scp a pair of certificate and private key to each node under directory /etc/flocker and rename these files to node.crt and node.key. Also scp the cluster.crt file to each node under /etc/flocker.   
+
+### Integration with Flocker in OpenStack to manager Cinder volumes
+Next you have to create on each openstack instane an [`agent.yml`](../../tree/master/flocker/agent.yml) file in the /etc/flocker/ directory to let Flocker talk to Cinder.
+
+### Installing Flocker client
+
+Install the flockerctl command at the control-service node. https://docs.clusterhq.com/en/latest/flocker-features/flockerctl.html
+
+To run flockerctl, you need an APIUser certificate. How to create one is specified here:https://docs.clusterhq.com/en/latest/kubernetes-integration/generate-api-certificates.html. You also need to set 3 environment variables:
+
+```
+export FLOCKER_CERTS_PATH=/etc/flocker
+export FLOCKER_USER=kubernetes
+export FLOCKER_CONTROL_SERVICE=172.17.13.43
+```
+
+#### Bug 
+
+There is a bug in version 1.13 of Flocker:
+
+See: https://github.com/ClusterHQ/flocker/issues/2841
+
+Quick fix: update file `cinder.py` in directory `/opt/flocker/lib/python2.7/site-packages/flocker/node/agents/` with new file in code repository `flocker/cinder.py`.
+
+This bug has been resolved in version 1.14
+
+
+## Integrating Flocker and Kubernetes
 
 On every Kubernetes node where Flocker volumes will be attached, one or more environment variables and files must be created in order to mutually authenticate Kubernetes and Flocker against each other: Kubernetes as a user of the Flocker cluster and the Flocker cluster as a Flocker volume manager to Kubernetes. The environment variables can be set in the shell session where you will run the master or worker scripts of Kubernetes:
 
@@ -29,6 +59,19 @@ On every Kubernetes node where Flocker volumes will be attached, one or more env
   - `FLOCKER_CONTROL_SERVICE_CLIENT_KEY_FILE` should refer to the full path to the api key file for the API user
   - `FLOCKER_CONTROL_SERVICE_CLIENT_CERT_FILE` should refer to the full path to the api certificate file for the API user
   
+
+### Final Tips
+
+You have to specify a name when creating a dataset. Otherwise the kubernetes agent will not be able to find the dataset.
+
+To create a dataset with a name you have to specify the following command
+
+```
+flockerctl create -m name=my-volume -s 50G -n 265a0498
+```
+
+Flocker will then complain to Kubernetes that it can't find the dataset by its datasetID, but this warning is skipped by Kubernetes. Next the Pod will start its containers and the volume is linked with a subdirectory of `/flocker` directory.
+
 
 #### Possible TODO's:
 * Run Flocker using Docker as well.
