@@ -24,7 +24,7 @@ I've tested Flocker with the Cinder volume service in a private Openstack cloud.
 The clue is that you specify the right configuration for this dataset manager in an `agent.yml` file in the /etc/flocker/ directory. 
 
 The configuration syntax depends on the underlying dataset manager.
-For Openstack: see [`agent.yml`](../../tree/master/flocker/agent.yml) file.
+For Openstack: see [`agent.yml`](flocker/agent.yml) file.
 
 ### Installing Flocker client
 
@@ -44,7 +44,7 @@ There is a bug in version 1.13 of Flocker:
 
 See: https://github.com/ClusterHQ/flocker/issues/2841
 
-Quick fix: update file `cinder.py` in directory `/opt/flocker/lib/python2.7/site-packages/flocker/node/agents/` with new file in code repository `flocker/cinder.py`.
+Quick fix: update file `cinder.py` in directory `/opt/flocker/lib/python2.7/site-packages/flocker/node/agents/` with new file in code repository [`flocker/cinder.py`](flocker/cinder.py).
 
 This bug has been resolved in version 1.14
 
