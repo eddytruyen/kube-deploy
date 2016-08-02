@@ -7,15 +7,24 @@ The extension ensures that the necessary Flocker environment variables and secur
 
 Linux machines with **Docker 1.11.0 or higher**
 
-## Installing Flocker
 A working installation of Flocker on every Kubernetes node is required. The flocker control service is typically installed on the Kubernetes master node.
 
-See https://docs.clusterhq.com/en/latest/kubernetes-integration/manual-install.html
+## Installing Flocker
+
+See https://docs.clusterhq.com/en/latest/kubernetes-integration/manual-install.html.
+
 There was some ambiguity in the Section [Configuring cluster authentication](https://docs.clusterhq.com/en/latest/kubernetes-integration/configuring-authentication.html).
 It is the idea that you generate node certificates for each node to which volumes should be attached. You have to generate these node certificates from the node where the flockercli package is installed (typically the control service node of Flocker), and in the directory where the cluster.key key is stored. Then scp a pair of certificate and private key to each node under directory /etc/flocker and rename these files to node.crt and node.key. Also scp the cluster.crt file to each node under /etc/flocker.   
 
 ### Integration with Flocker in OpenStack to manager Cinder volumes
-Next you have to create on each openstack instane an [`agent.yml`](../../tree/master/flocker/agent.yml) file in the /etc/flocker/ directory to let Flocker talk to Cinder.
+
+Flocker depends on an underlying dataset manager for attaching volumes.
+I've tested Flocker with the Cinder volume service in a private Openstack cloud.
+
+The clue is that you specify the right configuration for this dataset manager in an `agent.yml` file in the /etc/flocker/ directory. 
+
+The configuration syntax depends on the underlying dataset manager.
+For Openstack: see [`agent.yml`](../../tree/master/flocker/agent.yml) file.
 
 ### Installing Flocker client
 
