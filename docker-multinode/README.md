@@ -53,8 +53,8 @@ This bug has been resolved in version 1.14
 
 On every Kubernetes node where Flocker volumes will be attached, one or more environment variables and files must be created in order to mutually authenticate Kubernetes and Flocker against each other: Kubernetes as a user of the Flocker cluster and the Flocker cluster as a Flocker volume manager to Kubernetes. The environment variables can be set in the shell session where you will run the master or worker scripts of Kubernetes:
 
-* Only one environment variable must be specified mandatory: 
-  - `FLOCKER_USER_CA_DIR` should refer to the directory where the necessary keys and certificates for authenticating kubernetes are stored 
+* Three optional environment variables can be specified: 
+  - Optional: `FLOCKER_USER_CA_DIR` should refer to the directory where the necessary keys and certificates for authenticating kubernetes and flocker are stored. This defaults to `/etc/flocker`. If you don't want that sensitve information, stored in the guest host's /etc/flocker directory, are passed to the hyperkube container, you better use another directory.  
   - Optional: the `FLOCKER_CONTROL_SERVICE_PORT` defaults to 4523, but if the Flocker control service listens on another port you must specify this.
   - Optional: The `FLOCKER_CONTROL_SERVICE_HOST` defaults to the `${MASTER_IP}`
 
