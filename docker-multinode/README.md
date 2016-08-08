@@ -81,6 +81,12 @@ flockerctl create -m name=my-volume -s 50G -n 265a0498
 
 Flocker will then complain to Kubernetes that it can't find the dataset by its datasetID, but this warning is skipped by Kubernetes. Next the Pod will start its containers and the volume is linked with a subdirectory of `/flocker` directory.
 
+Curl example for the REST API of flocker
+
+```
+curl -XGET --cacert /etc/flocker/cluster.crt --cert /etc/flocker/kubernetes.crt --key /etc/flocker/kubernetes.key https://172.17.13.43:4523/v1/configuration/datasets
+curl -XDELETE --cacert /etc/flocker/cluster.crt --cert /etc/flocker/kubernetes.crt --key /etc/flocker/kubernetes.key https://172.17.13.43:4523/v1/configuration/datasets/cb681701-01f6-4be0-9e08-ab12e694f915
+```
 
 #### Possible TODO's:
 * Run Flocker using Docker as well.
