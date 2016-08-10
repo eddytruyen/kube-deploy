@@ -246,6 +246,7 @@ kube::multinode::start_k8s_worker() {
       --cluster-dns=10.0.0.10 \
       --cluster-domain=cluster.local \
       ${CNI_ARGS} \
+      --hostname-override=$(ip -o -4 addr list ${NET_INTERFACE} | awk '{print $4}' | cut -d/ -f1) \
       --v=2
 }
 
