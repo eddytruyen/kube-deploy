@@ -208,7 +208,7 @@ kube::multinode::start_k8s_master() {
     --privileged \
     --restart=${RESTART_POLICY} \
     ${KUBELET_MOUNTS} \
-    gcr.io/google_containers/hyperkube-${ARCH}:${K8S_VERSION} \
+    ${REGISTRY}/hyperkube-${ARCH}:${K8S_VERSION} \
     /hyperkube kubelet \
       --allow-privileged \
       --api-servers=http://localhost:8080 \
@@ -239,14 +239,13 @@ kube::multinode::start_k8s_worker() {
     --privileged \
     --restart=${RESTART_POLICY} \
     ${KUBELET_MOUNTS} \
-    gcr.io/google_containers/hyperkube-${ARCH}:${K8S_VERSION} \
+    ${REGISTRY}/hyperkube-${ARCH}:${K8S_VERSION} \
     /hyperkube kubelet \
       --allow-privileged \
       --api-servers=http://${MASTER_IP}:8080 \
       --cluster-dns=10.0.0.10 \
       --cluster-domain=cluster.local \
       ${CNI_ARGS} \
-      --hostname-override=$(ip -o -4 addr list ${NET_INTERFACE} | awk '{print $4}' | cut -d/ -f1) \
       --v=2
 }
 
