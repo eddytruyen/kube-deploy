@@ -151,7 +151,7 @@ Clone the `kube-deploy` repo, and run [master.sh](master.sh) on the master machi
 
 ```console
 $ git clone https://github.com/kubernetes/kube-deploy
-$ cd docker-multinode
+$ cd kube-deploy/docker-multinode
 $ ./master.sh
 ```
 
@@ -168,13 +168,20 @@ Clone the `kube-deploy` repo, and run [worker.sh](worker.sh) on the worker machi
 
 ```console
 $ git clone https://github.com/kubernetes/kube-deploy
-$ cd docker-multinode
+$ cd kube-deploy/docker-multinode
 $ export MASTER_IP=${SOME_IP}
 $ ./worker.sh
 ```
 
 First, the `bootstrap` docker daemon is started, then `flannel` is started as a container in the bootstrap daemon, in order to set up the overlay network.
 Then, the main docker daemon is restarted and lastly `kubelet` is launched as a container in the main docker daemon.
+
+## Get kubectl
+
+```
+curl -sSL https://storage.googleapis.com/kubernetes-release/release/v[KUBECTL_VERSION]/bin/linux/amd64/kubectl > /usr/local/bin/kubectl
+chmod +x /usr/local/bin/kubectl
+```
 
 ## Addons
 

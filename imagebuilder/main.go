@@ -35,7 +35,9 @@ import (
 	"google.golang.org/api/storage/v1"
 	"io/ioutil"
 	"k8s.io/kube-deploy/imagebuilder/pkg/imagebuilder"
+	"k8s.io/kube-deploy/imagebuilder/pkg/imagebuilder/executor"
 	"net/url"
+	"os"
 	"path"
 	"strings"
 )
@@ -52,9 +54,12 @@ var flagConfig = flag.String("config", "", "Config file to load")
 
 var flagUp = flag.Bool("up", true, "Set to create instance (if not found)")
 var flagBuild = flag.Bool("build", true, "Set to build image")
+var flagTag = flag.Bool("tag", true, "Set to tag image")
 var flagPublish = flag.Bool("publish", true, "Set to publish image")
 var flagReplicate = flag.Bool("replicate", true, "Set to copy the image to all regions")
 var flagDown = flag.Bool("down", true, "Set to shut down instance (if found)")
+
+var flagLocalhost = flag.Bool("localhost", false, "Set to use local machine for execution")
 
 func loadConfig(dest interface{}, src string) error {
 	data, err := ioutil.ReadFile(src)
@@ -92,7 +97,7 @@ func main() {
 	var cloud imagebuilder.Cloud
 	switch config.Cloud {
 	case "aws":
-		awsConfig, awsCloud, err := initAWS()
+		awsConfig, awsCloud, err := initAWS(*flagLocalhost)
 		if err != nil {
 			glog.Exitf("%v", err)
 		}
@@ -179,34 +184,36 @@ func main() {
 			User: config.SSHUsername,
 		}
 
-		if config.SSHPrivateKey == "" {
-			glog.Fatalf("SSHPublicKey is required")
-			// We used to allow the SSH agent, but probably more trouble than it is worth?
-			//sshAgent, err := net.Dial("unix", os.Getenv("SSH_AUTH_SOCK"))
-			//if err != nil {
-			//	glog.Fatalf("error connecting to SSH agent: %v", err)
-			//}
-			//
-			//sshConfig.Auth = append(sshConfig.Auth, ssh.PublicKeysCallback(agent.NewClient(sshAgent).Signers))
-		} else {
-			keyBytes, err := imagebuilder.ReadFile(config.SSHPrivateKey)
-			if err != nil {
-				glog.Exitf("error loading SSH private key: %v", err)
-			}
-			key, err := ssh.ParsePrivateKey(keyBytes)
-			if err != nil {
-				glog.Exitf("error parsing SSH private key: %v", err)
-			}
+		if !*flagLocalhost {
+			if config.SSHPrivateKey == "" {
+				glog.Fatalf("SSHPublicKey is required")
+				// We used to allow the SSH agent, but probably more trouble than it is worth?
+				//sshAgent, err := net.Dial("unix", os.Getenv("SSH_AUTH_SOCK"))
+				//if err != nil {
+				//	glog.Fatalf("error connecting to SSH agent: %v", err)
+				//}
+				//
+				//sshConfig.Auth = append(sshConfig.Auth, ssh.PublicKeysCallback(agent.NewClient(sshAgent).Signers))
+			} else {
+				keyBytes, err := imagebuilder.ReadFile(config.SSHPrivateKey)
+				if err != nil {
+					glog.Exitf("error loading SSH private key: %v", err)
+				}
+				key, err := ssh.ParsePrivateKey(keyBytes)
+				if err != nil {
+					glog.Exitf("error parsing SSH private key: %v", err)
+				}
 
-			sshConfig.Auth = append(sshConfig.Auth, ssh.PublicKeys(key))
+				sshConfig.Auth = append(sshConfig.Auth, ssh.PublicKeys(key))
+			}
 		}
-		sshClient, err := instance.DialSSH(sshConfig)
+		x, err := instance.DialSSH(sshConfig)
 		if err != nil {
 			glog.Fatalf("error SSHing to instance: %v", err)
 		}
-		defer sshClient.Close()
+		defer x.Close()
 
-		sshHelper := imagebuilder.NewSSH(sshClient)
+		sshHelper := executor.NewTarget(x)
 
 		builder := imagebuilder.NewBuilder(config, sshHelper)
 		err = builder.RunSetupCommands()
@@ -232,6 +239,31 @@ func main() {
 		if image == nil {
 			glog.Fatalf("image not found after build: %q", imageName)
 		}
+	}
+
+	if *flagTag {
+		if image == nil {
+			glog.Fatalf("image not found: %q", imageName)
+		}
+
+		glog.Infof("Tagging image %q", image)
+
+		tags := make(map[string]string)
+		for k, v := range config.Tags {
+			tags[k] = v
+		}
+
+		{
+			t := time.Now().UTC().Format("20060102150405")
+			tags["k8s.io/build"] = t
+		}
+
+		err = image.AddTags(tags)
+		if err != nil {
+			glog.Fatalf("error tagging image %q: %v", imageName, err)
+		}
+
+		glog.Infof("Tagged image %q", image)
 	}
 
 	if *flagPublish {
@@ -278,9 +310,13 @@ func main() {
 	}
 }
 
-func initAWS() (*imagebuilder.AWSConfig, *imagebuilder.AWSCloud, error) {
+func initAWS(useLocalhost bool) (*imagebuilder.AWSConfig, *imagebuilder.AWSCloud, error) {
+	region := os.Getenv("AWS_REGION")
+	if region == "" {
+		region = os.Getenv("AWS_DEFAULT_REGION")
+	}
 	awsConfig := &imagebuilder.AWSConfig{}
-	awsConfig.InitDefaults()
+	awsConfig.InitDefaults(region)
 	err := loadConfig(awsConfig, *flagConfig)
 	if err != nil {
 		glog.Exitf("Error loading AWS config: %v", err)
@@ -291,7 +327,7 @@ func initAWS() (*imagebuilder.AWSConfig, *imagebuilder.AWSCloud, error) {
 	}
 
 	ec2Client := ec2.New(session.New(), &aws.Config{Region: &awsConfig.Region})
-	awsCloud := imagebuilder.NewAWSCloud(ec2Client, awsConfig)
+	awsCloud := imagebuilder.NewAWSCloud(ec2Client, awsConfig, useLocalhost)
 
 	return awsConfig, awsCloud, nil
 }

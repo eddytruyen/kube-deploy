@@ -22,6 +22,7 @@ import (
 	"golang.org/x/crypto/ssh"
 	"google.golang.org/api/compute/v1"
 	"google.golang.org/api/googleapi"
+	"k8s.io/kube-deploy/imagebuilder/pkg/imagebuilder/executor"
 	"time"
 )
 
@@ -43,7 +44,7 @@ func (i *GCEInstance) Shutdown() error {
 }
 
 // DialSSH establishes an SSH client connection to the instance
-func (i *GCEInstance) DialSSH(config *ssh.ClientConfig) (*ssh.Client, error) {
+func (i *GCEInstance) DialSSH(config *ssh.ClientConfig) (executor.Executor, error) {
 	publicIP, err := i.WaitPublicIP()
 	if err != nil {
 		return nil, err
@@ -59,7 +60,7 @@ func (i *GCEInstance) DialSSH(config *ssh.ClientConfig) (*ssh.Client, error) {
 			//	return nil, fmt.Errorf("error connecting to SSH on server %q", publicIP)
 		}
 
-		return sshClient, nil
+		return executor.NewSSH(sshClient), nil
 	}
 }
 
@@ -291,7 +292,12 @@ func (i *GCEImage) EnsurePublic() error {
 	return fmt.Errorf("GCE does not currently support public images")
 }
 
-// ReplicateImage copies the image to all accessable GCE regions
+// AddTags adds the specified tags on the image
+func (i *GCEImage) AddTags(tags map[string]string) error {
+	return fmt.Errorf("Tagging of GCE images not yet implemented")
+}
+
+// ReplicateImage copies the image to all accessible GCE regions
 func (i *GCEImage) ReplicateImage(makePublic bool) (map[string]Image, error) {
 	if makePublic {
 		return nil, fmt.Errorf("GCE does not currently support public images")

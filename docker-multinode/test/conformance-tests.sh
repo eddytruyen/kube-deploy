@@ -14,34 +14,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Source common.sh
-source $(dirname "${BASH_SOURCE}")/common.sh
+# exit on any error
+set -e
 
-# Set MASTER_IP to localhost when deploying a master
-MASTER_IP=localhost
+source $(dirname "${BASH_SOURCE}")/environment.sh
+source $(dirname "${BASH_SOURCE}")/util.sh
 
-kube::multinode::main
+install_minimal_dependencies
 
-kube::multinode::log_variables
+install_go
 
-kube::multinode::turndown
+clone_k8s
 
-if [[ ${USE_CNI} == "true" ]]; then
-  kube::cni::ensure_docker_settings
-
-  kube::multinode::start_etcd
-
-  kube::multinode::start_flannel
-else
-  kube::bootstrap::bootstrap_daemon
-
-  kube::multinode::start_etcd
-
-  kube::multinode::start_flannel
-
-  kube::bootstrap::restart_docker
-fi
-
-kube::multinode::start_k8s_master
-
-kube::log::status "Done. It may take about a minute before apiserver is up."
+start_tests

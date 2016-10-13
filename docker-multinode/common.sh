@@ -14,32 +14,53 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Utility functions for Kubernetes in docker setup
-
-source $(dirname "${BASH_SOURCE}")/cni-plugin.sh
-source $(dirname "${BASH_SOURCE}")/docker-bootstrap.sh
+cd "$(dirname "${BASH_SOURCE}")"
+source cni-plugin.sh
+source docker-bootstrap.sh
 
 kube::multinode::main(){
-  LATEST_STABLE_K8S_VERSION=$(kube::helpers::curl "https://storage.googleapis.com/kubernetes-release/release/stable.txt")
+
+  # Require root
+  if [[ "$(id -u)" != "0" ]]; then
+    kube::log::fatal "Please run as root"
+  fi
+
+  for tool in curl ip docker; do
+    if [[ ! -f $(which ${tool} 2>&1) ]]; then
+      kube::log::fatal "The binary ${tool} is required. Install it."
+    fi
+  done
+
+  # Make sure docker daemon is running
+  if [[ $(docker ps 2>&1 1>/dev/null; echo $?) != 0 ]]; then
+    kube::log::fatal "Docker is not running on this machine!"
+  fi
+
+  LATEST_STABLE_K8S_VERSION=$(curl -sSL "https://storage.googleapis.com/kubernetes-release/release/stable.txt")
   K8S_VERSION=${K8S_VERSION:-${LATEST_STABLE_K8S_VERSION}}
 
-  ETCD_VERSION=${ETCD_VERSION:-"2.2.5"}
+  CURRENT_PLATFORM=$(kube::helpers::host_platform)
+  ARCH=${ARCH:-${CURRENT_PLATFORM##*/}}
 
-  FLANNEL_VERSION=${FLANNEL_VERSION:-"0.5.5"}
+  if [[ ${ARCH} == "arm" ]]; then
+    ETCD_VERSION=${ETCD_VERSION:-"2.2.5"}
+  else
+    ETCD_VERSION=${ETCD_VERSION:-"3.0.4"}
+  fi
+
+  FLANNEL_VERSION=${FLANNEL_VERSION:-"v0.6.1"}
   FLANNEL_IPMASQ=${FLANNEL_IPMASQ:-"true"}
   FLANNEL_BACKEND=${FLANNEL_BACKEND:-"udp"}
   FLANNEL_NETWORK=${FLANNEL_NETWORK:-"10.1.0.0/16"}
 
   RESTART_POLICY=${RESTART_POLICY:-"unless-stopped"}
 
-  CURRENT_PLATFORM=$(kube::helpers::host_platform)
-  ARCH=${ARCH:-${CURRENT_PLATFORM##*/}}
-
-  DEFAULT_NET_INTERFACE=$(ip -o -4 route show to default | awk '{print $5}')
-  NET_INTERFACE=${NET_INTERFACE:-${DEFAULT_NET_INTERFACE}}
+  DEFAULT_IP_ADDRESS=$(ip -o -4 addr list $(ip -o -4 route show to default | awk '{print $5}' | head -1) | awk '{print $4}' | cut -d/ -f1 | head -1)
+  IP_ADDRESS=${IP_ADDRESS:-${DEFAULT_IP_ADDRESS}}
 
   TIMEOUT_FOR_SERVICES=${TIMEOUT_FOR_SERVICES:-20}
   USE_CNI=${USE_CNI:-"false"}
+  USE_CONTAINERIZED=${USE_CONTAINERIZED:-"false"}
   CNI_ARGS=""
 
   FLOCKER_CONTROL_SERVICE_PORT=${FLOCKER_CONTROL_SERVICE_PORT:-4523}
@@ -54,51 +75,43 @@ kube::multinode::main(){
   # Constants
   BOOTSTRAP_DOCKER_SOCK="unix:///var/run/docker-bootstrap.sock"
   BOOTSTRAP_DOCKER_PARAM="-H ${BOOTSTRAP_DOCKER_SOCK}"
+  ETCD_NET_PARAM="--net host"
+
+  if [[ ${USE_CONTAINERIZED} == "true" ]]; then
+    ROOTFS_MOUNT="-v /:/rootfs:ro"
+    KUBELET_MOUNT="-v /var/lib/kubelet:/var/lib/kubelet:slave"
+    CONTAINERIZED_FLAG="--containerized"
+  else
+    ROOTFS_MOUNT=""
+    KUBELET_MOUNT="-v /var/lib/kubelet:/var/lib/kubelet:shared"
+    CONTAINERIZED_FLAG=""
+  fi
+
   KUBELET_MOUNTS="\
+    ${ROOTFS_MOUNT} \
     -v /sys:/sys:rw \
     -v /var/run:/var/run:rw \
     -v /run:/run:rw \
     -v /var/lib/docker:/var/lib/docker:rw \
-    -v /var/lib/kubelet:/var/lib/kubelet:shared \
     -v ${FLOCKER_USER_CA_DIR}:${FLOCKER_USER_CA_DIR} \
+    ${KUBELET_MOUNT} \
     -v /var/log/containers:/var/log/containers:rw"
 
   # Paths
   FLANNEL_SUBNET_DIR=${FLANNEL_SUBNET_DIR:-/run/flannel}
 
-  if [[ ${USE_CNI} == true ]]; then
+  if [[ ${USE_CNI} == "true" ]]; then
 
     BOOTSTRAP_DOCKER_PARAM=""
+    ETCD_NET_PARAM="-p 2379:2379 -p 2380:2380 -p 4001:4001"
     CNI_ARGS="\
       --network-plugin=cni \
       --network-plugin-dir=/etc/cni/net.d"
   fi
-
-  # Trap errors
-  kube::log::install_errexit
-}
-
-# Make shared kubelet directory
-kube::multinode::make_shared_kubelet_dir() {
-    mkdir -p /var/lib/kubelet
-    mount --bind /var/lib/kubelet /var/lib/kubelet
-    mount --make-shared /var/lib/kubelet
 }
 
 # Ensure everything is OK, docker is running and we're root
-kube::multinode::check_params() {
-
-  # Make sure docker daemon is running
-  if [[ $(docker ps 2>&1 1>/dev/null; echo $?) != 0 ]]; then
-    kube::log::error "Docker is not running on this machine!"
-    exit 1
-  fi
-
-  # Require root
-  if [[ "$(id -u)" != "0" ]]; then
-    kube::log::error >&2 "Please run as root"
-    exit 1
-  fi
+kube::multinode::log_variables() {
 
   kube::helpers::parse_version ${K8S_VERSION}
 
@@ -112,10 +125,11 @@ kube::multinode::check_params() {
   kube::log::status "RESTART_POLICY is set to: ${RESTART_POLICY}"
   kube::log::status "MASTER_IP is set to: ${MASTER_IP}"
   kube::log::status "ARCH is set to: ${ARCH}"
-  kube::log::status "NET_INTERFACE is set to: ${NET_INTERFACE}"
+  kube::log::status "IP_ADDRESS is set to: ${IP_ADDRESS}"
   kube::log::status "USE_CNI is set to: ${USE_CNI}"
   kube::log::status "FLOCKER_CONTROL_SERVICE_HOST is set to ${FLOCKER_CONTROL_SERVICE_HOST}"
   kube::log::status "FLOCKER_USER_CA_DIR is set to ${FLOCKER_USER_CA_DIR}"
+  kube::log::status "USE_CONTAINERIZED is set to: ${USE_CONTAINERIZED}"
   kube::log::status "--------------------------------------------"
 }
 
@@ -124,34 +138,28 @@ kube::multinode::start_etcd() {
 
   kube::log::status "Launching etcd..."
 
+  # TODO: Remove the 4001 port as it is deprecated
   docker ${BOOTSTRAP_DOCKER_PARAM} run -d \
+    --name kube_etcd_$(kube::helpers::small_sha) \
     --restart=${RESTART_POLICY} \
-    --net=host \
+    ${ETCD_NET_PARAM} \
     -v /var/lib/kubelet/etcd:/var/etcd \
     gcr.io/google_containers/etcd-${ARCH}:${ETCD_VERSION} \
     /usr/local/bin/etcd \
-      --listen-client-urls=http://127.0.0.1:4001,http://${MASTER_IP}:4001 \
-      --advertise-client-urls=http://${MASTER_IP}:4001 \
+      --listen-client-urls=http://0.0.0.0:2379,http://0.0.0.0:4001 \
+      --advertise-client-urls=http://localhost:2379,http://localhost:4001 \
+      --listen-peer-urls=http://0.0.0.0:2380 \
       --data-dir=/var/etcd/data
 
   # Wait for etcd to come up
   local SECONDS=0
-  while [[ $(curl -fs http://localhost:4001/v2/machines 2>&1 1>/dev/null; echo $?) != 0 ]]; do
+  while [[ $(curl -fsSL http://localhost:2379/health 2>&1 1>/dev/null; echo $?) != 0 ]]; do
     ((SECONDS++))
     if [[ ${SECONDS} == ${TIMEOUT_FOR_SERVICES} ]]; then
-      kube::log::error "etcd failed to start. Exiting..."
-      exit 1
+      kube::log::fatal "etcd failed to start. Exiting..."
     fi
     sleep 1
   done
-
-  # Set flannel net config
-  docker ${BOOTSTRAP_DOCKER_PARAM} run \
-      --net=host \
-      gcr.io/google_containers/etcd-${ARCH}:${ETCD_VERSION} \
-      etcdctl \
-      set /coreos.com/network/config \
-          "{ \"Network\": \"${FLANNEL_NETWORK}\", \"Backend\": {\"Type\": \"${FLANNEL_BACKEND}\"}}"
 
   sleep 2
 }
@@ -161,25 +169,34 @@ kube::multinode::start_flannel() {
 
   kube::log::status "Launching flannel..."
 
+  # Set flannel net config (when running on master)
+  if [[ "${MASTER_IP}" == "localhost" ]]; then
+    curl -sSL http://localhost:2379/v2/keys/coreos.com/network/config -XPUT \
+      -d value="{ \"Network\": \"${FLANNEL_NETWORK}\", \"Backend\": {\"Type\": \"${FLANNEL_BACKEND}\"}}"
+  fi
+
+  # Make sure that a subnet file doesn't already exist
+  rm -f ${FLANNEL_SUBNET_DIR}/subnet.env
+
   docker ${BOOTSTRAP_DOCKER_PARAM} run -d \
+    --name kube_flannel_$(kube::helpers::small_sha) \
     --restart=${RESTART_POLICY} \
     --net=host \
     --privileged \
     -v /dev/net:/dev/net \
     -v ${FLANNEL_SUBNET_DIR}:${FLANNEL_SUBNET_DIR} \
-    gcr.io/google_containers/flannel-${ARCH}:${FLANNEL_VERSION} \
+    quay.io/coreos/flannel:${FLANNEL_VERSION}-${ARCH} \
     /opt/bin/flanneld \
-      --etcd-endpoints=http://${MASTER_IP}:4001 \
+      --etcd-endpoints=http://${MASTER_IP}:2379 \
       --ip-masq="${FLANNEL_IPMASQ}" \
-      --iface="${NET_INTERFACE}"
+      --iface="${IP_ADDRESS}"
 
   # Wait for the flannel subnet.env file to be created instead of a timeout. This is faster and more reliable
   local SECONDS=0
   while [[ ! -f ${FLANNEL_SUBNET_DIR}/subnet.env ]]; do
     ((SECONDS++))
     if [[ ${SECONDS} == ${TIMEOUT_FOR_SERVICES} ]]; then
-      kube::log::error "flannel failed to start. Exiting..."
-      exit 1
+      kube::log::fatal "flannel failed to start. Exiting..."
     fi
     sleep 1
   done
@@ -192,11 +209,11 @@ kube::multinode::start_flannel() {
 
 # Start kubelet first and then the master components as pods
 kube::multinode::start_k8s_master() {
+  kube::multinode::create_kubeconfig
   kube::log::status "Launching Kubernetes master components..."
 
   kube::multinode::make_shared_kubelet_dir
 
-  # TODO: Get rid of --hostname-override
   docker run -d \
     -e "FLOCKER_CONTROL_SERVICE_HOST=${FLOCKER_CONTROL_SERVICE_HOST}" \
     -e "FLOCKER_CONTROL_SERVICE_PORT=${FLOCKER_CONTROL_SERVICE_PORT}" \
@@ -207,6 +224,7 @@ kube::multinode::start_k8s_master() {
     --pid=host \
     --privileged \
     --restart=${RESTART_POLICY} \
+    --name kube_kubelet_$(kube::helpers::small_sha) \
     ${KUBELET_MOUNTS} \
     gcr.io/google_containers/hyperkube-${ARCH}:${K8S_VERSION} \
     /hyperkube kubelet \
@@ -216,18 +234,19 @@ kube::multinode::start_k8s_master() {
       --cluster-dns=10.0.0.10 \
       --cluster-domain=cluster.local \
       ${CNI_ARGS} \
-      --hostname-override=$(ip -o -4 addr list ${NET_INTERFACE} | awk '{print $4}' | cut -d/ -f1) \
+      ${CONTAINERIZED_FLAG} \
+      --hostname-override=${IP_ADDRESS} \
       --v=2
 }
 
 # Start kubelet in a container, for a worker node
 kube::multinode::start_k8s_worker() {
+  kube::multinode::create_kubeconfig
   kube::log::status "Launching Kubernetes worker components..."
 
   kube::multinode::make_shared_kubelet_dir
 
   # TODO: Use secure port for communication
-  # TODO: Get rid of --hostname-override
   docker run -d \
     -e "FLOCKER_CONTROL_SERVICE_HOST=${FLOCKER_CONTROL_SERVICE_HOST}" \
     -e "FLOCKER_CONTROL_SERVICE_PORT=${FLOCKER_CONTROL_SERVICE_PORT}" \
@@ -238,6 +257,7 @@ kube::multinode::start_k8s_worker() {
     --pid=host \
     --privileged \
     --restart=${RESTART_POLICY} \
+    --name kube_kubelet_$(kube::helpers::small_sha) \
     ${KUBELET_MOUNTS} \
     gcr.io/google_containers/hyperkube-${ARCH}:${K8S_VERSION} \
     /hyperkube kubelet \
@@ -246,27 +266,19 @@ kube::multinode::start_k8s_worker() {
       --cluster-dns=10.0.0.10 \
       --cluster-domain=cluster.local \
       ${CNI_ARGS} \
-      --hostname-override=$(ip -o -4 addr list ${NET_INTERFACE} | awk '{print $4}' | cut -d/ -f1) \
+      ${CONTAINERIZED_FLAG} \
+      --hostname-override=${IP_ADDRESS} \
       --v=2
 }
 
 # Start kube-proxy in a container, for a worker node
 kube::multinode::start_k8s_worker_proxy() {
 
-  # Some quite complex version checking here...
-  # If the version is under v1.3.0-alpha.5, kube-proxy is run manually in this script
-  # In v1.3.0-alpha.5 and above, kube-proxy is run in a DaemonSet
-  # This has been uncommented for now, since the DaemonSet was inactivated in the stable v1.3 release
-  #if [[ $((VERSION_MINOR < 3)) == 1 || \
-  #      $((VERSION_MINOR <= 3)) == 1 && \
-  #      $(echo ${VERSION_EXTRA}) != "" && \
-  #      ${VERSION_PRERELEASE} == "alpha" && \
-  #      $((VERSION_PRERELEASE_REV < 5)) == 1 ]]; then
-
   kube::log::status "Launching kube-proxy..."
   docker run -d \
     --net=host \
     --privileged \
+    --name kube_proxy_$(kube::helpers::small_sha) \
     --restart=${RESTART_POLICY} \
     gcr.io/google_containers/hyperkube-${ARCH}:${K8S_VERSION} \
     /hyperkube proxy \
@@ -278,46 +290,23 @@ kube::multinode::start_k8s_worker_proxy() {
 kube::multinode::turndown(){
 
   # Check if docker bootstrap is running
-  if [[ $(kube::helpers::is_running ${BOOTSTRAP_DOCKER_SOCK}) == "true" ]]; then
+  DOCKER_BOOTSTRAP_PID=$(ps aux | grep ${BOOTSTRAP_DOCKER_SOCK} | grep -v "grep" | awk '{print $2}')
+  if [[ ! -z ${DOCKER_BOOTSTRAP_PID} ]]; then
 
     kube::log::status "Killing docker bootstrap..."
 
-    # Kill all docker bootstrap's containers
-    if [[ $(docker -H ${BOOTSTRAP_DOCKER_SOCK} ps -q | wc -l) != 0 ]]; then
-      docker -H ${BOOTSTRAP_DOCKER_SOCK} rm -f $(docker -H ${BOOTSTRAP_DOCKER_SOCK} ps -q)
-    fi
-
-    # Kill bootstrap docker
-    kill $(ps aux | grep ${BOOTSTRAP_DOCKER_SOCK} | grep -v grep | awk '{print $2}')
-
+    # Kill the bootstrap docker daemon and it's containers
+    docker -H ${BOOTSTRAP_DOCKER_SOCK} rm -f $(docker -H ${BOOTSTRAP_DOCKER_SOCK} ps -q) >/dev/null 2>/dev/null
+    kill ${DOCKER_BOOTSTRAP_PID}
   fi
 
-  if [[ $(kube::helpers::is_running /hyperkube) == "true" ]]; then
+  kube::log::status "Killing all kubernetes containers..."
 
-    kube::log::status "Killing hyperkube containers..."
-
-    # Kill all hyperkube docker images
-    docker rm -f $(docker ps | grep gcr.io/google_containers/hyperkube | awk '{print $1}')
+  if [[ $(docker ps | grep "kube_" | awk '{print $1}' | wc -l) != 0 ]]; then
+    docker rm -f $(docker ps | grep "kube_" | awk '{print $1}')
   fi
-
-  if [[ $(kube::helpers::is_running /pause) == "true" ]]; then
-
-    kube::log::status "Killing pause containers..."
-
-    # Kill all pause docker images
-    docker rm -f $(docker ps | grep gcr.io/google_containers/pause | awk '{print $1}')
-  fi
-
-  if [[ $(docker ps -q | wc -l) != 0 ]]; then
-    read -p "Should we stop the other containers that are running too? [Y/n] " stop_containers
-
-    case $stop_containers in
-      [nN]*)
-        ;; # Do nothing
-      *)
-        docker kill $(docker ps -q)
-        ;;
-    esac
+  if [[ $(docker ps | grep "k8s_" | awk '{print $1}' | wc -l) != 0 ]]; then
+    docker rm -f $(docker ps | grep "k8s_" | awk '{print $1}')
   fi
 
   if [[ -d /var/lib/kubelet ]]; then
@@ -328,11 +317,11 @@ kube::multinode::turndown(){
         ;; # Do nothing
       *)
         # umount if there are mounts in /var/lib/kubelet
-        if [[ ! -z $(mount | grep /var/lib/kubelet | awk '{print $3}') ]]; then
+        if [[ ! -z $(mount | grep "/var/lib/kubelet" | awk '{print $3}') ]]; then
 
-          # The umount command may be a little bit subborn sometimes, so run the commands twice to ensure the mounts are gone
-          mount | grep /var/lib/kubelet/* | awk '{print $3}' | xargs umount 1>/dev/null 2>/dev/null
-          mount | grep /var/lib/kubelet/* | awk '{print $3}' | xargs umount 1>/dev/null 2>/dev/null
+          # The umount command may be a little bit stubborn sometimes, so run the commands twice to ensure the mounts are gone
+          mount | grep "/var/lib/kubelet/*" | awk '{print $3}' | xargs umount 1>/dev/null 2>/dev/null
+          mount | grep "/var/lib/kubelet/*" | awk '{print $3}' | xargs umount 1>/dev/null 2>/dev/null
           umount /var/lib/kubelet 1>/dev/null 2>/dev/null
           umount /var/lib/kubelet 1>/dev/null 2>/dev/null
         fi
@@ -343,80 +332,53 @@ kube::multinode::turndown(){
     esac
   fi
 
-  # Remove cni0 bridge
-  if [[ ! -z $(ifconfig | grep "cni0") ]]; then
-    ifconfig cni0 down
-    brctl delbr cni0
+  # Remove cni0 bridge if K8S_VERSION = v1.4.0-alpha.2
+  # With versions above that, it's not required. TODO: Remove this later
+  kube::multinode::delete_bridge cni0
+}
+
+kube::multinode::delete_bridge() {
+  if [[ ! -z $(ip link | grep "$1") ]]; then
+    ip link set $1 down
+    ip link del $1
   fi
 }
 
-# Install network utils: ifconfig, brctl
-kube::multinode::install_network_utils() {
-    if kube::helpers::command_exists yum; then
+# Make shared kubelet directory
+kube::multinode::make_shared_kubelet_dir() {
 
-      if ! kube::helpers::command_exists ifconfig; then
-        yum -y -q install net-tools
-      fi
-      if ! kube::helpers::command_exists brctl; then
-        yum -y -q install bridge-utils
-      fi
+  # This only has to be done when the host doesn't use systemd
+  if ! kube::helpers::command_exists systemctl; then
+    mkdir -p /var/lib/kubelet
+    mount --bind /var/lib/kubelet /var/lib/kubelet
+    mount --make-shared /var/lib/kubelet
 
-    elif kube::helpers::command_exists apt-get; then
-
-      if ! kube::helpers::command_exists brctl; then
-        apt-get install -y bridge-utils
-      fi
-
-    fi
+    kube::log::status "Mounted /var/lib/kubelet with shared propagnation"
+  fi
 }
 
-## Helpers
+kube::multinode::create_kubeconfig(){
+  # Create a kubeconfig.yaml file for the proxy daemonset
+  mkdir -p /var/lib/kubelet/kubeconfig
+  sed -e "s|MASTER_IP|${MASTER_IP}|g" kubeconfig.yaml > /var/lib/kubelet/kubeconfig/kubeconfig.yaml
+}
 
 # Check if a command is valid
 kube::helpers::command_exists() {
-    command -v "$@" > /dev/null 2>&1
+  command -v "$@" > /dev/null 2>&1
 }
 
-# Usage: kube::helpers::file_replace_line {path_to_file} {value_to_search_for} {replace_that_line_with_this_content}
-# Finds a line in a file and replaces the line with the third argument
-kube::helpers::file_replace_line(){
-  if [[ -z $(grep -e "$2" $1) ]]; then
-    echo "$3" >> $1
-  else
-    sed -i "/$2/c\\$3" $1
-  fi
-}
-
+# Backup the current file
 kube::helpers::backup_file(){
-  # Backup the current file
   cp -f ${1} ${1}.backup
 }
 
-# Check if a process is running
-kube::helpers::is_running(){
-  if [[ ! -z $(ps aux | grep ${1} | grep -v grep) ]]; then
-    echo "true"
-  else
-    echo "false"
-  fi
+# Returns five "random" chars
+kube::helpers::small_sha(){
+  date | md5sum | cut -c-5
 }
 
-# Wraps curl or wget in a helper function.
-# Output is redirected to stdout
-kube::helpers::curl(){
-  if [[ $(which curl 2>&1) ]]; then
-    curl -sSL $1
-  elif [[ $(which wget 2>&1) ]]; then
-    wget -qO- $1
-  else
-    kube::log::error "Couldn't find curl or wget. Bailing out."
-    exit 4
-  fi
-}
-
-# This figures out the host platform without relying on golang. We need this as
-# we don't want a golang install to be a prerequisite to building yet we need
-# this info to figure out where the final binaries are placed.
+# Get the architecture for the current machine
 kube::helpers::host_platform() {
   local host_os
   local host_arch
@@ -424,8 +386,7 @@ kube::helpers::host_platform() {
     Linux)
       host_os=linux;;
     *)
-      kube::log::error "Unsupported host OS. Must be linux."
-      exit 1;;
+      kube::log::fatal "Unsupported host OS. Must be linux.";;
   esac
 
   case "$(uname -m)" in
@@ -444,8 +405,7 @@ kube::helpers::host_platform() {
     ppc64le*)
       host_arch=ppc64le;;
     *)
-      kube::log::error "Unsupported host arch. Must be x86_64, arm, arm64 or ppc64le."
-      exit 1;;
+      kube::log::fatal "Unsupported host arch. Must be x86_64, arm, arm64 or ppc64le.";;
   esac
   echo "${host_os}/${host_arch}"
 }
@@ -454,7 +414,7 @@ kube::helpers::parse_version() {
   local -r version_regex="^v(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(-(beta|alpha)\\.(0|[1-9][0-9]*))?$"
   local -r version="${1-}"
   [[ "${version}" =~ ${version_regex} ]] || {
-    kube::log::error "Invalid release version: '${version}', must match regex ${version_regex}"
+    kube::log::fatal "Invalid release version: '${version}', must match regex ${version_regex}"
     return 1
   }
   VERSION_MAJOR="${BASH_REMATCH[1]}"
@@ -475,81 +435,13 @@ kube::log::status() {
   done
 }
 
-# Handler for when we exit automatically on an error.
-# Borrowed from https://gist.github.com/ahendrix/7030300
-kube::log::errexit() {
-  local err="${PIPESTATUS[@]}"
-
-  # If the shell we are in doesn't have errexit set (common in subshells) then
-  # don't dump stacks.
-  set +o | grep -qe "-o errexit" || return
-
-  set +o xtrace
-  local code="${1:-1}"
-  kube::log::error_exit "'${BASH_COMMAND}' exited with status $err" "${1:-1}" 1
-}
-
-kube::log::install_errexit() {
-  # trap ERR to provide an error handler whenever a command exits nonzero  this
-  # is a more verbose version of set -o errexit
-  trap 'kube::log::errexit' ERR
-
-  # setting errtrace allows our ERR trap handler to be propagated to functions,
-  # expansions and subshells
-  set -o errtrace
-}
-
-# Print out the stack trace
-#
-# Args:
-#   $1 The number of stack frames to skip when printing.
-kube::log::stack() {
-  local stack_skip=${1:-0}
-  stack_skip=$((stack_skip + 1))
-  if [[ ${#FUNCNAME[@]} -gt $stack_skip ]]; then
-    echo "Call stack:" >&2
-    local i
-    for ((i=1 ; i <= ${#FUNCNAME[@]} - $stack_skip ; i++))
-    do
-      local frame_no=$((i - 1 + stack_skip))
-      local source_file=${BASH_SOURCE[$frame_no]}
-      local source_lineno=${BASH_LINENO[$((frame_no - 1))]}
-      local funcname=${FUNCNAME[$frame_no]}
-      echo "  $i: ${source_file}:${source_lineno} ${funcname}(...)" >&2
-    done
-  fi
-}
-
-# Log an error and exit.
-# Args:
-#   $1 Message to log with the error
-#   $2 The error code to return
-#   $3 The number of stack frames to skip when printing.
-kube::log::error_exit() {
-  local message="${1:-}"
-  local code="${2:-1}"
-  local stack_skip="${3:-0}"
-  stack_skip=$((stack_skip + 1))
-
-  local source_file=${BASH_SOURCE[$stack_skip]}
-  local source_line=${BASH_LINENO[$((stack_skip - 1))]}
-  echo "!!! Error in ${source_file}:${source_line}" >&2
-  [[ -z ${1-} ]] || {
-    echo "  ${1}" >&2
-  }
-
-  kube::log::stack $stack_skip
-
-  echo "Exiting with status ${code}" >&2
-  exit "${code}"
-}
-
-# Log an error but keep going.  Don't dump the stack or exit.
-kube::log::error() {
+# Log an error and exit
+kube::log::fatal() {
   timestamp=$(date +"[%m%d %H:%M:%S]")
   echo "!!! $timestamp ${1-}" >&2
   shift
   for message; do
     echo "    $message" >&2
   done
+  exit 1
 }

@@ -33,6 +33,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ec2"
 	"github.com/golang/glog"
+	"k8s.io/kube-deploy/imagebuilder/pkg/imagebuilder/executor"
 )
 
 const tagRoleKey = "k8s.io/role/imagebuilder"
@@ -44,6 +45,8 @@ type AWSInstance struct {
 	instance   *ec2.Instance
 }
 
+var _ Instance = &AWSInstance{}
+
 // Shutdown terminates the running instance
 func (i *AWSInstance) Shutdown() error {
 	glog.Infof("Terminating instance %q", i.instanceID)
@@ -51,7 +54,7 @@ func (i *AWSInstance) Shutdown() error {
 }
 
 // DialSSH establishes an SSH client connection to the instance
-func (i *AWSInstance) DialSSH(config *ssh.ClientConfig) (*ssh.Client, error) {
+func (i *AWSInstance) DialSSH(config *ssh.ClientConfig) (executor.Executor, error) {
 	publicIP, err := i.WaitPublicIP()
 	if err != nil {
 		return nil, err
@@ -67,7 +70,7 @@ func (i *AWSInstance) DialSSH(config *ssh.ClientConfig) (*ssh.Client, error) {
 			//	return nil, fmt.Errorf("error connecting to SSH on server %q", publicIP)
 		}
 
-		return sshClient, nil
+		return executor.NewSSH(sshClient), nil
 	}
 }
 
@@ -89,23 +92,47 @@ func (i *AWSInstance) WaitPublicIP() (string, error) {
 	}
 }
 
+type LocalhostInstance struct {
+	cloud Cloud
+}
+
+// Shutdown terminates the running instance
+func (i *LocalhostInstance) Shutdown() error {
+	glog.Infof("Skipping termination of localhost")
+	return nil
+}
+
+// DialSSH establishes an SSH client connection to the instance
+func (i *LocalhostInstance) DialSSH(config *ssh.ClientConfig) (executor.Executor, error) {
+	return &executor.LocalhostExecutor{}, nil
+}
+
 // AWSCloud is a helper type for talking to an AWS acccount
 type AWSCloud struct {
 	config *AWSConfig
 
 	ec2 *ec2.EC2
+
+	useLocalhost bool
 }
 
 var _ Cloud = &AWSCloud{}
 
-func NewAWSCloud(ec2 *ec2.EC2, config *AWSConfig) *AWSCloud {
+func NewAWSCloud(ec2 *ec2.EC2, config *AWSConfig, useLocalhost bool) *AWSCloud {
 	return &AWSCloud{
-		ec2:    ec2,
-		config: config,
+		ec2:          ec2,
+		config:       config,
+		useLocalhost: useLocalhost,
 	}
 }
 
 func (a *AWSCloud) GetExtraEnv() (map[string]string, error) {
+	env := make(map[string]string)
+
+	if a.useLocalhost {
+		return env, nil
+	}
+
 	credentials := a.ec2.Config.Credentials
 	if credentials == nil {
 		return nil, fmt.Errorf("unable to determine EC2 credentials")
@@ -116,7 +143,6 @@ func (a *AWSCloud) GetExtraEnv() (map[string]string, error) {
 		return nil, fmt.Errorf("error fetching EC2 credentials: %v", err)
 	}
 
-	env := make(map[string]string)
 	env["AWS_ACCESS_KEY"] = creds.AccessKeyID
 	env["AWS_SECRET_KEY"] = creds.SecretAccessKey
 
@@ -147,6 +173,11 @@ func (a *AWSCloud) describeInstance(instanceID string) (*ec2.Instance, error) {
 
 // TerminateInstance terminates the specified instance
 func (a *AWSCloud) TerminateInstance(instanceID string) error {
+	if a.useLocalhost {
+		glog.Infof("Skipping termination as locahost")
+		return nil
+	}
+
 	request := &ec2.TerminateInstancesInput{}
 	request.InstanceIds = []*string{&instanceID}
 
@@ -157,6 +188,10 @@ func (a *AWSCloud) TerminateInstance(instanceID string) error {
 
 // GetInstance returns the AWS instance matching our tags, or nil if not found
 func (a *AWSCloud) GetInstance() (Instance, error) {
+	if a.useLocalhost {
+		return &LocalhostInstance{}, nil
+	}
+
 	request := &ec2.DescribeInstancesInput{}
 	request.Filters = []*ec2.Filter{
 		{
@@ -176,6 +211,23 @@ func (a *AWSCloud) GetInstance() (Instance, error) {
 			instanceID := aws.StringValue(instance.InstanceId)
 			if instanceID == "" {
 				panic("Found instance with empty instance ID")
+			}
+
+			if instance.State == nil {
+				glog.Warningf("Ignoring instance with nil state: %q", instanceID)
+			}
+
+			state := aws.StringValue(instance.State.Name)
+			switch state {
+			case ec2.InstanceStateNameShuttingDown, ec2.InstanceStateNameTerminated, ec2.InstanceStateNameStopping, ec2.InstanceStateNameStopped:
+				glog.Infof("Ignoring instance %q in state %q", instanceID, state)
+				continue
+
+			case ec2.InstanceStateNamePending, ec2.InstanceStateNameRunning:
+				glog.V(2).Infof("Instance %q is in state %q", instanceID, state)
+
+			default:
+				glog.Warningf("Found instance %q in unknown state %q", instanceID, state)
 			}
 
 			glog.Infof("Found existing instance: %q", instanceID)
@@ -300,6 +352,7 @@ func (c *AWSCloud) findSSHKey(name string) (*ec2.KeyPairInfo, error) {
 
 	return k, nil
 }
+
 func (c *AWSCloud) ensureSSHKey() (string, error) {
 	publicKey, err := ReadFile(c.config.SSHPublicKey)
 	if err != nil {
@@ -337,6 +390,10 @@ func (c *AWSCloud) ensureSSHKey() (string, error) {
 
 // CreateInstance creates an instance for building an image instance
 func (c *AWSCloud) CreateInstance() (Instance, error) {
+	if c.useLocalhost {
+		return &LocalhostInstance{cloud: c}, nil
+	}
+
 	var err error
 	sshKeyName := c.config.SSHKeyName
 	if sshKeyName == "" {
@@ -513,6 +570,26 @@ func (i *AWSImage) String() string {
 // EnsurePublic makes the image accessible outside the current account
 func (i *AWSImage) EnsurePublic() error {
 	return i.ensurePublic()
+}
+
+// AddTags adds the specified tags on the image
+func (i *AWSImage) AddTags(tags map[string]string) error {
+	request := &ec2.CreateTagsInput{}
+	request.Resources = append(request.Resources, aws.String(i.imageID))
+	for k, v := range tags {
+		request.Tags = append(request.Tags, &ec2.Tag{
+			Key:   aws.String(k),
+			Value: aws.String(v),
+		})
+	}
+
+	glog.V(2).Infof("AWS CreateTags on image %v", i.imageID)
+	_, err := i.ec2.CreateTags(request)
+	if err != nil {
+		return fmt.Errorf("error tagging image %q: %v", i.imageID, err)
+	}
+
+	return err
 }
 
 func (i *AWSImage) waitStatusAvailable() error {

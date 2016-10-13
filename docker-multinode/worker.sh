@@ -25,19 +25,15 @@ fi
 
 kube::multinode::main
 
-kube::multinode::check_params
-
-kube::multinode::install_network_utils
+kube::multinode::log_variables
 
 kube::multinode::turndown
 
-if [[ ${USE_CNI} = "true" ]]; then
+if [[ ${USE_CNI} == "true" ]]; then
   kube::cni::ensure_docker_settings
 
   kube::multinode::start_flannel
 else
-  kube::bootstrap::detect_lsb
-
   kube::bootstrap::bootstrap_daemon
 
   kube::multinode::start_flannel
@@ -47,6 +43,13 @@ fi
 
 kube::multinode::start_k8s_worker
 
-kube::multinode::start_k8s_worker_proxy
+# If under v1.4.0-alpha.3, run the proxy
+if [[ $((VERSION_MINOR < 4)) == 1 || \
+      ($((VERSION_MINOR <= 4)) == 1 && \
+      ${VERSION_PRERELEASE} == "alpha" && \
+      $((VERSION_PRERELEASE_REV < 3)) == 1) ]]; then
+
+	kube::multinode::start_k8s_worker_proxy
+fi
 
 kube::log::status "Done. After about a minute the node should be ready."
