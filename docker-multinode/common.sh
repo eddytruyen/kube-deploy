@@ -233,6 +233,7 @@ kube::multinode::start_k8s_master() {
       --config=/etc/kubernetes/manifests-multi \
       --cluster-dns=10.0.0.10 \
       --cluster-domain=cluster.local \
+      --cloud-provider=openstack \
       ${CNI_ARGS} \
       ${CONTAINERIZED_FLAG} \
       --hostname-override=${IP_ADDRESS} \
@@ -265,6 +266,7 @@ kube::multinode::start_k8s_worker() {
       --api-servers=http://${MASTER_IP}:8080 \
       --cluster-dns=10.0.0.10 \
       --cluster-domain=cluster.local \
+      --cloud-provider=openstack \
       ${CNI_ARGS} \
       ${CONTAINERIZED_FLAG} \
       --hostname-override=${IP_ADDRESS} \
