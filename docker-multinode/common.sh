@@ -95,8 +95,7 @@ kube::multinode::main(){
     -v /var/lib/docker:/var/lib/docker:rw \
     -v ${FLOCKER_USER_CA_DIR}:${FLOCKER_USER_CA_DIR} \
     ${KUBELET_MOUNT} \
-    -v /var/log/containers:/var/log/containers:rw \
-    -v /home/ubuntu/containers_on_openstack/openstack-integration/hyperkube:/openstack"
+    -v /var/log/containers:/var/log/containers:rw"
 
   # Paths
   FLANNEL_SUBNET_DIR=${FLANNEL_SUBNET_DIR:-/run/flannel}
@@ -234,8 +233,6 @@ kube::multinode::start_k8s_master() {
       --config=/etc/kubernetes/manifests-multi \
       --cluster-dns=10.0.0.10 \
       --cluster-domain=cluster.local \
-      --cloud-provider=openstack \
-      --cloud-config=/openstack/cloud_config \
       ${CNI_ARGS} \
       ${CONTAINERIZED_FLAG} \
       --hostname-override=${IP_ADDRESS} \
@@ -268,8 +265,6 @@ kube::multinode::start_k8s_worker() {
       --api-servers=http://${MASTER_IP}:8080 \
       --cluster-dns=10.0.0.10 \
       --cluster-domain=cluster.local \
-      --cloud-provider=openstack \
-      --cloud-config=/openstack/cloud_config \
       ${CNI_ARGS} \
       ${CONTAINERIZED_FLAG} \
       --hostname-override=${IP_ADDRESS} \
