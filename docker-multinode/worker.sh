@@ -17,11 +17,15 @@
 # Source common.sh
 source $(dirname "${BASH_SOURCE}")/common.sh
 
+
 # Make sure MASTER_IP is properly set
 if [[ -z ${MASTER_IP} ]]; then
     echo "Please export MASTER_IP in your env"
     exit 1
 fi
+
+FLOCKER_CONTROL_SERVICE_HOST=${FLOCKER_CONTROL_SERVICE_HOST:-${MASTER_IP}}
+
 
 kube::multinode::main
 

@@ -17,6 +17,9 @@
 # Source common.sh
 source $(dirname "${BASH_SOURCE}")/common.sh
 
+FLOCKER_CONTROL_SERVICE_HOST=${FLOCKER_CONTROL_SERVICE_HOST:-${MASTER_IP}}
+
+
 # Set MASTER_IP to localhost when deploying a master
 MASTER_IP=localhost
 
