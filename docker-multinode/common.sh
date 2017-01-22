@@ -235,7 +235,6 @@ kube::multinode::start_k8s_master() {
       ${CNI_ARGS} \
       ${CONTAINERIZED_FLAG} \
       --hostname-override=${IP_ADDRESS} \
-      --eviction-pressure-transition-period=10s \
       --v=2
 }
 
@@ -267,7 +266,6 @@ kube::multinode::start_k8s_worker() {
       --cluster-domain=cluster.local \
       ${CNI_ARGS} \
       ${CONTAINERIZED_FLAG} \
-      --eviction-pressure-transition-period=10s \
       --hostname-override=${IP_ADDRESS} \
       --v=2
 }
