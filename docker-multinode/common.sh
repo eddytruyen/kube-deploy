@@ -227,6 +227,7 @@ kube::multinode::start_k8s_master() {
     --restart=${RESTART_POLICY} \
     --name kube_kubelet_$(kube::helpers::small_sha) \
     ${KUBELET_MOUNTS} \
+    -v `pwd`:/openstack \
     ${REGISTRY}/hyperkube-${ARCH}:${K8S_VERSION} \
     /hyperkube kubelet \
       --allow-privileged \
@@ -237,6 +238,8 @@ kube::multinode::start_k8s_master() {
       ${CNI_ARGS} \
       ${CONTAINERIZED_FLAG} \
       --hostname-override=${IP_ADDRESS} \
+      --cloud-provider=openstack \
+      --cloud-config=/openstack/cloud-config \
       --v=2
 }
 
@@ -260,6 +263,7 @@ kube::multinode::start_k8s_worker() {
     --restart=${RESTART_POLICY} \
     --name kube_kubelet_$(kube::helpers::small_sha) \
     ${KUBELET_MOUNTS} \
+    -v `pwd`:/openstack \
     ${REGISTRY}/hyperkube-${ARCH}:${K8S_VERSION} \
     /hyperkube kubelet \
       --allow-privileged \
@@ -269,6 +273,8 @@ kube::multinode::start_k8s_worker() {
       ${CNI_ARGS} \
       ${CONTAINERIZED_FLAG} \
       --hostname-override=${IP_ADDRESS} \
+      --cloud-provider=openstack \
+      --cloud-config=/openstack/cloud-config \
       --v=2
 }
 
@@ -281,9 +287,12 @@ kube::multinode::start_k8s_worker_proxy() {
     --privileged \
     --name kube_proxy_$(kube::helpers::small_sha) \
     --restart=${RESTART_POLICY} \
+    -v `pwd`:/openstack \
     ${REGISTRY}/hyperkube-${ARCH}:${K8S_VERSION} \
     /hyperkube proxy \
         --master=http://${MASTER_IP}:8080 \
+        --cloud-provider=openstack \
+        --cloud-config=/openstack/cloud-config \
         --v=2
 }
 
