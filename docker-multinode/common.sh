@@ -291,8 +291,6 @@ kube::multinode::start_k8s_worker_proxy() {
     ${REGISTRY}/hyperkube-${ARCH}:${K8S_VERSION} \
     /hyperkube proxy \
         --master=http://${MASTER_IP}:8080 \
-        --cloud-provider=openstack \
-        --cloud-config=/openstack/cloud-config \
         --v=2
 }
 
