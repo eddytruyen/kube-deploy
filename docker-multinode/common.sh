@@ -95,6 +95,7 @@ kube::multinode::main(){
   fi
 
   if [[ ${USE_CLOUD_PROVIDER} == "true" ]]; then
+    REGISTRY=decomads
     CLOUD_PROVIDER_ARG="--cloud-provider=${CLOUD_PROVIDER}"
     CLOUD_CONFIG_ARG="--cloud-config=/${CLOUD_PROVIDER}/${CLOUD_CONFIG_FILE}"
     KUBELET_MOUNTS="\
