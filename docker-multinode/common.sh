@@ -64,6 +64,12 @@ kube::multinode::main(){
   USE_CNI=${USE_CNI:-"false"}
   USE_CONTAINERIZED=${USE_CONTAINERIZED:-"false"}
   CNI_ARGS=""
+  USE_CLOUD_PROVIDER=${USE_CLOUD_PROVIDER:-"false"}
+  CLOUD_PROVIDER=${CLOUD_PROVIDER:-"openstack"}
+  CLOUD_CONFIG_DIR=${CLOUD_CONFIG_DIR:-`pwd`}
+  CLOUD_CONFIG_FILE=${CLOUD_CONFIG_FILE:-"cloud-config"}
+  CLOUD_PROVIDER_ARG=""
+  CLOUD_CONFIG_ARG=""
 
   FLOCKER_CONTROL_SERVICE_PORT=${FLOCKER_CONTROL_SERVICE_PORT:-4523}
   
@@ -88,7 +94,21 @@ kube::multinode::main(){
     CONTAINERIZED_FLAG=""
   fi
 
-  KUBELET_MOUNTS="\
+  if [[ ${USE_CLOUD_PROVIDER} == "true" ]]; then
+    CLOUD_PROVIDER_ARG="--cloud-provider=${CLOUD_PROVIDER}"
+    CLOUD_CONFIG_ARG="--cloud-config=/${CLOUD_PROVIDER}/${CLOUD_CONFIG_FILE}"
+    KUBELET_MOUNTS="\
+    ${ROOTFS_MOUNT} \
+    -v /sys:/sys:rw \
+    -v /var/run:/var/run:rw \
+    -v /run:/run:rw \
+    -v /var/lib/docker:/var/lib/docker:rw \
+    -v ${FLOCKER_USER_CA_DIR}:${FLOCKER_USER_CA_DIR} \
+    ${KUBELET_MOUNT} \
+    -v ${CLOUD_CONFIG_DIR}:/${CLOUD_PROVIDER} \
+    -v /var/log/containers:/var/log/containers:rw"
+  else
+    KUBELET_MOUNTS="\
     ${ROOTFS_MOUNT} \
     -v /sys:/sys:rw \
     -v /var/run:/var/run:rw \
@@ -97,6 +117,8 @@ kube::multinode::main(){
     -v ${FLOCKER_USER_CA_DIR}:${FLOCKER_USER_CA_DIR} \
     ${KUBELET_MOUNT} \
     -v /var/log/containers:/var/log/containers:rw"
+ fi
+
 
   # Paths
   FLANNEL_SUBNET_DIR=${FLANNEL_SUBNET_DIR:-/run/flannel}
@@ -227,7 +249,6 @@ kube::multinode::start_k8s_master() {
     --restart=${RESTART_POLICY} \
     --name kube_kubelet_$(kube::helpers::small_sha) \
     ${KUBELET_MOUNTS} \
-    -v `pwd`:/openstack \
     ${REGISTRY}/hyperkube-${ARCH}:${K8S_VERSION} \
     /hyperkube kubelet \
       --allow-privileged \
@@ -238,8 +259,8 @@ kube::multinode::start_k8s_master() {
       ${CNI_ARGS} \
       ${CONTAINERIZED_FLAG} \
       --hostname-override=${IP_ADDRESS} \
-      --cloud-provider=openstack \
-      --cloud-config=/openstack/cloud-config \
+      ${CLOUD_PROVIDER_ARG} \
+      ${CLOUD_CONFIG_ARG} \
       --v=2
 }
 
@@ -273,8 +294,8 @@ kube::multinode::start_k8s_worker() {
       ${CNI_ARGS} \
       ${CONTAINERIZED_FLAG} \
       --hostname-override=${IP_ADDRESS} \
-      --cloud-provider=openstack \
-      --cloud-config=/openstack/cloud-config \
+      ${CLOUD_PROVIDER_ARG} \
+      ${CLOUD_CONFIG_ARG} \
       --v=2
 }
 
