@@ -184,7 +184,8 @@ chmod +x /usr/local/bin/kubectl
 ## Only for docker 1.12 and beyond:
 Docker 1.12 has changed its default firewall configuration to a more protective mode. Therefore, in order to allow connections to services in Kubernetes, execute on each master and worker node in a user session the following command
 
-```sudo iptables -P FORWARD ACCEPT
+```
+sudo iptables -P FORWARD ACCEPT
 ```
 
 
