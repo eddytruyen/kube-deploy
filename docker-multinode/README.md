@@ -120,3 +120,7 @@ $ sed -e "s/ARCH/${ARCH}/g;" skydns.yaml | kubectl create -f -
 Follow [this link](https://releases.k8s.io/release-1.2/cluster/addons/dns#how-do-i-test-if-it-is-working) to check it out.
 
 
+## Integration with Flocker (deprecated)
+
+This version of docker-multi-node also supports integration with flocker volumes. See [here](../../../wiki/Flocker-volumes-for-the-Portable-Multi-Node-Kubernetes-cluster-(deprecated))
+
