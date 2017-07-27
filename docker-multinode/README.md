@@ -88,8 +88,8 @@ Then, the main docker daemon is restarted and lastly `kubelet` is launched as a 
 curl -sSL https://storage.googleapis.com/kubernetes-release/release/v[KUBECTL_VERSION]/bin/linux/amd64/kubectl > /usr/local/bin/kubectl
 chmod +x /usr/local/bin/kubectl
 ```
-## Only for docker 1.12 and beyond:
-Docker 1.12 has changed its default firewall configuration to a more protective mode. Therefore, in order to allow connections to services in Kubernetes, execute on each master and worker node in a user session the following command
+## Only for docker 1.13 and beyond:
+Docker 1.13 has changed its default firewall configuration to a more protective mode. Therefore, in order to allow connections to services in Kubernetes, execute on each master and worker node in a user session the following command
 
 ```
 sudo iptables -P FORWARD ACCEPT
